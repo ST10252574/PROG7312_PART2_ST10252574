@@ -1,0 +1,710 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Smart-X IoT data ingestion and validation gateway
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: gateway
+    description: Smart-X gateway operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /summary:
+    get:
+      operationId: getGatewaySummary
+      tags: [gateway]
+      summary: Get gateway summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewaySummary"
+  /sensors:
+    get:
+      operationId: listSensors
+      tags: [gateway]
+      summary: List registered sensors
+      responses:
+        "200":
+          description: Registered sensors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sensor"
+    post:
+      operationId: createSensor
+      tags: [gateway]
+      summary: Register a sensor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SensorInput"
+      responses:
+        "201":
+          description: Registered sensor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "400":
+          description: Invalid sensor registration
+  /telemetry:
+    get:
+      operationId: listTelemetry
+      tags: [gateway]
+      summary: List recent telemetry
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Recent telemetry readings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TelemetryReading"
+    post:
+      operationId: ingestTelemetry
+      tags: [gateway]
+      summary: Ingest and validate telemetry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelemetryInput"
+      responses:
+        "202":
+          description: Telemetry accepted or rejected with validation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionResult"
+        "400":
+          description: Malformed telemetry payload
+  /validation:
+    post:
+      operationId: validateTelemetry
+      tags: [gateway]
+      summary: Validate telemetry without storing it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelemetryInput"
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationResult"
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [gateway]
+      summary: List recent gateway activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
+  /devices:
+    get:
+      operationId: listDevices
+      tags: [gateway]
+      summary: List command-capable devices
+      responses:
+        "200":
+          description: Registered command devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+  /commands:
+    get:
+      operationId: listCommands
+      tags: [gateway]
+      summary: List the live command stream
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [queued, processing, completed, failed]
+        - name: deviceId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching commands
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviceCommand"
+    post:
+      operationId: createCommand
+      tags: [gateway]
+      summary: Queue a device command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceCommandInput"
+      responses:
+        "200":
+          description: Existing command returned for a repeated idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceCommand"
+        "202":
+          description: Command accepted into a queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceCommand"
+        "400":
+          description: Invalid command or unsupported action
+        "409":
+          description: Duplicate idempotency key
+  /commands/history:
+    get:
+      operationId: listCommandHistory
+      tags: [gateway]
+      summary: List completed command history
+      responses:
+        "200":
+          description: Completed commands, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviceCommand"
+  /searches:
+    get:
+      operationId: listSearchEvents
+      tags: [gateway]
+      summary: List recent operator searches
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Recent searches used by the recommendation engine
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SearchEvent"
+    post:
+      operationId: createSearchEvent
+      tags: [gateway]
+      summary: Record an operator search for pattern analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchEventInput"
+      responses:
+        "201":
+          description: Search event recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchEvent"
+        "400":
+          description: Search query is invalid
+  /recommendations:
+    get:
+      operationId: listRecommendations
+      tags: [gateway]
+      summary: List predictive recommendations
+      responses:
+        "200":
+          description: Current recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recommendation"
+  /recommendations/{recommendationId}/resolve:
+    post:
+      operationId: resolveRecommendation
+      tags: [gateway]
+      summary: Apply or dismiss a recommendation
+      parameters:
+        - name: recommendationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecommendationDecisionInput"
+      responses:
+        "200":
+          description: Updated recommendation and optional queued command
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecommendationDecisionResult"
+        "404":
+          description: Recommendation not found
+  /engagement:
+    get:
+      operationId: getEngagementStrategy
+      tags: [gateway]
+      summary: Get the active engagement strategy
+      responses:
+        "200":
+          description: Active engagement strategy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementStrategy"
+    put:
+      operationId: updateEngagementStrategy
+      tags: [gateway]
+      summary: Update the active engagement strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EngagementStrategyInput"
+      responses:
+        "200":
+          description: Updated engagement strategy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementStrategy"
+  /engagement/check-ins:
+    get:
+      operationId: getEngagementCheckInStatus
+      tags: [gateway]
+      summary: Get daily engagement check-in progress
+      responses:
+        "200":
+          description: Current daily and weekly return-visit progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementCheckInStatus"
+    post:
+      operationId: createEngagementCheckIn
+      tags: [gateway]
+      summary: Complete today's operator review check-in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EngagementCheckInInput"
+      responses:
+        "201":
+          description: Check-in recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementCheckInStatus"
+        "200":
+          description: Today's check-in was already complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementCheckInStatus"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Sensor:
+      type: object
+      required: [id, macAddress, location, category, status, lastSeen, readingsToday]
+      properties:
+        id:
+          type: string
+        macAddress:
+          type: string
+        location:
+          type: string
+        category:
+          type: string
+          enum: [environmental, power, actuator]
+        status:
+          type: string
+          enum: [online, warning, offline]
+        lastSeen:
+          type: string
+        readingsToday:
+          type: integer
+    SensorInput:
+      type: object
+      required: [macAddress, location, category]
+      properties:
+        macAddress:
+          type: string
+          minLength: 12
+        location:
+          type: string
+          minLength: 2
+        category:
+          type: string
+          enum: [environmental, power, actuator]
+    TelemetryReading:
+      type: object
+      required: [id, sensorId, sensorLabel, metric, value, unit, recordedAt, quality]
+      properties:
+        id:
+          type: string
+        sensorId:
+          type: string
+        sensorLabel:
+          type: string
+        metric:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        recordedAt:
+          type: string
+        quality:
+          type: string
+          enum: [valid, warning, rejected]
+    TelemetryInput:
+      type: object
+      required: [sensorId, metric, value, unit]
+      properties:
+        sensorId:
+          type: string
+        metric:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        recordedAt:
+          type: string
+    ValidationResult:
+      type: object
+      required: [valid, errors, warnings]
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+    IngestionResult:
+      type: object
+      required: [accepted, reading, validation]
+      properties:
+        accepted:
+          type: boolean
+        reading:
+          oneOf:
+            - $ref: "#/components/schemas/TelemetryReading"
+            - type: "null"
+        validation:
+          $ref: "#/components/schemas/ValidationResult"
+    ActivityEvent:
+      type: object
+      required: [id, title, detail, tone, occurredAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        tone:
+          type: string
+          enum: [success, warning, info]
+        occurredAt:
+          type: string
+    GatewaySummary:
+      type: object
+      required: [registeredSensors, onlineSensors, readingsToday, acceptedRate, alerts, lastIngestedAt]
+      properties:
+        registeredSensors:
+          type: integer
+        onlineSensors:
+          type: integer
+        readingsToday:
+          type: integer
+        acceptedRate:
+          type: number
+        alerts:
+          type: integer
+        lastIngestedAt:
+          type: string
+    EngagementStrategy:
+      type: object
+      required: [id, name, description, enabled, trigger, delivery, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        trigger:
+          type: string
+          enum: [threshold, disconnect, anomaly]
+        delivery:
+          type: string
+          enum: [dashboard, email, webhook]
+        updatedAt:
+          type: string
+    EngagementStrategyInput:
+      type: object
+      required: [name, description, enabled, trigger, delivery]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        trigger:
+          type: string
+          enum: [threshold, disconnect, anomaly]
+        delivery:
+          type: string
+          enum: [dashboard, email, webhook]
+    Device:
+      type: object
+      required: [id, name, type, state]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [water_pump, smart_relay]
+        state:
+          type: string
+        sensorId:
+          type: ["string", "null"]
+        macAddress:
+          type: ["string", "null"]
+    DeviceCommand:
+      type: object
+      required: [id, deviceId, deviceLabel, action, priority, status, queuedAt, startedAt, completedAt, result, idempotencyKey]
+      properties:
+        id:
+          type: string
+        deviceId:
+          type: string
+        deviceLabel:
+          type: string
+        action:
+          type: string
+          enum: [pump_start, pump_stop, relay_on, relay_off, relay_toggle]
+        priority:
+          type: string
+          enum: [standard, critical]
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        queuedAt:
+          type: string
+        startedAt:
+          type: ["string", "null"]
+        completedAt:
+          type: ["string", "null"]
+        result:
+          type: ["string", "null"]
+        idempotencyKey:
+          type: ["string", "null"]
+    DeviceCommandInput:
+      type: object
+      required: [deviceId, action, priority]
+      properties:
+        deviceId:
+          type: string
+        action:
+          type: string
+          enum: [pump_start, pump_stop, relay_on, relay_off, relay_toggle]
+        priority:
+          type: string
+          enum: [standard, critical]
+        idempotencyKey:
+          type: string
+          maxLength: 120
+    Recommendation:
+      type: object
+      required: [id, deviceId, deviceLabel, title, rationale, confidence, severity, suggestedAction, createdAt, status]
+      properties:
+        id:
+          type: string
+        deviceId:
+          type: string
+        deviceLabel:
+          type: string
+        title:
+          type: string
+        rationale:
+          type: string
+        confidence:
+          type: number
+        severity:
+          type: string
+          enum: [low, medium, high]
+        suggestedAction:
+          type: string
+          enum: [pump_start, pump_stop, relay_on, relay_off, relay_toggle]
+        createdAt:
+          type: string
+        status:
+          type: string
+          enum: [suggested, applied, dismissed]
+    RecommendationDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [apply, dismiss]
+    RecommendationDecisionResult:
+      type: object
+      required: [recommendation, command]
+      properties:
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
+        command:
+          oneOf:
+            - $ref: "#/components/schemas/DeviceCommand"
+            - type: "null"
+    SearchEvent:
+      type: object
+      required: [id, query, deviceId, occurredAt]
+      properties:
+        id:
+          type: string
+        query:
+          type: string
+        deviceId:
+          type: ["string", "null"]
+        occurredAt:
+          type: string
+    SearchEventInput:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 2
+          maxLength: 120
+        deviceId:
+          type: ["string", "null"]
+    EngagementCheckIn:
+      type: object
+      required: [id, date, checkedAt]
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+        checkedAt:
+          type: string
+    EngagementCheckInStatus:
+      type: object
+      required: [todayComplete, completedThisWeek, consecutiveDays, lastCheckedInAt, history]
+      properties:
+        todayComplete:
+          type: boolean
+        completedThisWeek:
+          type: integer
+        consecutiveDays:
+          type: integer
+        lastCheckedInAt:
+          type: ["string", "null"]
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/EngagementCheckIn"
+    EngagementCheckInInput:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 300
+      required: []
+
